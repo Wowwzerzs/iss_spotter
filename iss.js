@@ -1,6 +1,37 @@
 const request = require('request');
 
 /**
+ * Makes a single API request to retrieve upcoming ISS fly over times for the user's current location.
+ * Input:
+ *   - A callback with an error or results.
+ * Returns (via Callback):
+ *   - An error, if any (nullable)
+ *   - The fly-over times as an array (null if error):
+ *     [ { risetime: <number>, duration: <number> }, ... ]
+ */
+const nextISSTimesForMyLocation = function (callback) {
+  fetchMyIP((error, ip) => {
+    if (error) {
+      return callback(error, null);
+    }
+
+    fetchCoordsByIP(ip, (error, loc) => {
+      if (error) {
+        return callback(error, null);
+      }
+
+      fetchISSFlyOverTimes(loc, (error, nextPasses) => {
+        if (error) {
+          return callback(error, null);
+        }
+
+        callback(null, nextPasses);
+      });
+    });
+  });
+};
+
+/**
  * Makes a single API request to retrieve the user's IP address.
  * Input:
  *   - A callback (to pass back an error or the IP string)
@@ -10,20 +41,13 @@ const request = require('request');
  */
 const fetchMyIP = function (callback) {
   request('https://api.ipify.org?format=json', (error, response, body) => {
-    // error can be set if invalid domain, user is offline, etc.
-    if (error) {
-      callback(error, null);
-      return;
-    }
+    if (error) return callback(error, null);
 
-    // if non-200 status, assume server error
     if (response.statusCode !== 200) {
-      const msg = `Status Code ${response.statusCode} when fetching IP. Response: ${body}`;
-      callback(Error(msg), null);
+      callback(Error(`Status Code ${response.statusCode} when fetching IP: ${body}`), null);
       return;
     }
 
-    // if we get here, all's well and we got the data
     const ip = JSON.parse(body).ip;
     callback(null, ip);
   });
@@ -41,6 +65,7 @@ const fetchMyIP = function (callback) {
  */
 const fetchCoordsByIP = function (ip, callback) {
   request(`http://ipwho.is/${ip}`, (error, response, body) => {
+
     if (error) {
       callback(error, null);
       return;
@@ -50,7 +75,7 @@ const fetchCoordsByIP = function (ip, callback) {
 
     if (!parsedBody.success) {
       const message = `Success status was ${parsedBody.success}. Server message says: ${parsedBody.message} when fetching for IP ${parsedBody.ip}`;
-      callback(new Error(message), null);
+      callback(Error(message), null);
       return;
     }
 
@@ -61,7 +86,7 @@ const fetchCoordsByIP = function (ip, callback) {
 };
 
 /**
- * Makes a single API request to retrieve upcoming ISS fly over times for the given lat/lng coordinates.
+ * Makes a single API request to retrieve upcoming ISS fly over times the for the given lat/lng coordinates.
  * Input:
  *   - An object with keys `latitude` and `longitude`
  *   - A callback (to pass back an error or the array of resulting data)
@@ -89,4 +114,4 @@ const fetchISSFlyOverTimes = function (coords, callback) {
   });
 };
 
-module.exports = { fetchISSFlyOverTimes };
+module.exports = { nextISSTimesForMyLocation };
